@@ -62,6 +62,9 @@ async function loadLayout() {
     // Apply the layout structure (columns) to set up the grid
     await run('vscode.setEditorLayout', saved.layout);
 
+    // Track files that couldn't be opened
+    const failedFiles: string[] = [];
+
     // Process all files from the saved layout
     for (const { relativePath, column, pinned } of saved.documents) {
         const absPath = path.join(workspaceRoot, relativePath);
@@ -82,13 +85,19 @@ async function loadLayout() {
             if (pinned) {
                 await run('workbench.action.pinEditor');
             }
-        } catch {
-            // Silently skip files that can't be opened
-            // This allows the layout restoration to continue
+        } catch (error) {
+            failedFiles.push(relativePath);
         }
     }
 
-    notify('Layout restored successfully');
+    // Provide appropriate feedback based on results
+    if (failedFiles.length === 0) {
+        notify('Layout restored successfully');
+    } else if (failedFiles.length === saved.documents.length) {
+        notify('Failed to restore layout: no files could be opened', true);
+    } else {
+        notify(`Layout restored with ${failedFiles.length} file(s) unavailable: ${failedFiles.join(', ')}`);
+    }
 }
 
 function isTextTab(tab: vscode.Tab): tab is vscode.Tab & { input: vscode.TabInputText } {
