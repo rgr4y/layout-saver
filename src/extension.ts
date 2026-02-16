@@ -53,30 +53,42 @@ async function loadLayout() {
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot) return notify('No workspace folder found', true);
 
-    await closeEditors(true);
-
+    // Handle sidebar visibility first
     if (config.get('hideSideBarAfterOpen')) {
         await run('workbench.action.focusSideBar');
         await run('workbench.action.toggleSidebarVisibility');
     }
 
+    // Apply the layout structure (columns) to set up the grid
     await run('vscode.setEditorLayout', saved.layout);
 
+    // Process all files from the saved layout
     for (const { relativePath, column, pinned } of saved.documents) {
         const absPath = path.join(workspaceRoot, relativePath);
         const uri = vscode.Uri.file(absPath);
 
         try {
             const doc = await vscode.workspace.openTextDocument(uri);
+            
+            // Show the document in the correct column
+            // If it's already open, VS Code will move it; if not, it will open it
             await vscode.window.showTextDocument(doc, {
                 viewColumn: column,
-                preview: false
+                preview: false,
+                preserveFocus: true
             });
-            if (pinned) await run('workbench.action.pinEditor');
+
+            // Update pinned state if needed
+            if (pinned) {
+                await run('workbench.action.pinEditor');
+            }
         } catch {
-            notify(`Cannot open file "${relativePath}"`, true);
+            // Silently skip files that can't be opened
+            // This allows the layout restoration to continue
         }
     }
+
+    notify('Layout restored successfully');
 }
 
 function isTextTab(tab: vscode.Tab): tab is vscode.Tab & { input: vscode.TabInputText } {
@@ -88,13 +100,6 @@ function getValidTextTabs(): (vscode.Tab & { input: vscode.TabInputText })[] {
         .flatMap(group => group.tabs)
         .filter(isTextTab)
         .filter(tab => tab.input.uri.scheme === 'file'); // only save actual files
-}
-
-async function closeEditors(force = false) {
-    const tabs = vscode.window.tabGroups.all.flatMap(group => group.tabs);
-    const toClose = force ? tabs : tabs.filter(tab => !tab.isDirty);
-    await Promise.all(toClose.map(tab => vscode.window.tabGroups.close(tab)));
-    await run('workbench.action.editorLayoutSingle');
 }
 
 function notify(msg: string, isError = false) {
