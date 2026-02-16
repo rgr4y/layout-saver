@@ -96,7 +96,11 @@ async function loadLayout() {
     } else if (failedFiles.length === saved.documents.length) {
         notify('Failed to restore layout: no files could be opened', true);
     } else {
-        notify(`Layout restored with ${failedFiles.length} file(s) unavailable: ${failedFiles.join(', ')}`);
+        // Show warning for partial failures
+        const fileList = failedFiles.length <= 3 
+            ? failedFiles.join(', ')
+            : `${failedFiles.slice(0, 3).join(', ')} and ${failedFiles.length - 3} more`;
+        vscode.window.showWarningMessage(`Layout Saver: Layout restored with ${failedFiles.length} file(s) unavailable: ${fileList}`);
     }
 }
 
