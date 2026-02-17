@@ -66,16 +66,46 @@ async function saveLayout() {
     const existingLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const existingNames = Object.keys(existingLayouts);
     
-    // Prompt for layout name with existing layouts shown
-    const promptMessage = existingNames.length > 0
-        ? `Enter layout name (existing: ${existingNames.join(', ')})`
-        : 'Enter layout name';
+    // Use QuickPick to show existing layouts and allow entering a new name
+    const items: vscode.QuickPickItem[] = existingNames.map(name => ({
+        label: name,
+        description: '(existing layout - will overwrite)'
+    }));
     
-    const layoutName = await vscode.window.showInputBox({
-        prompt: promptMessage,
-        placeHolder: 'my-layout',
-        value: existingNames.length === 1 ? existingNames[0] : undefined
+    // Add option to enter new name
+    items.unshift({
+        label: '$(add) Enter new layout name...',
+        description: 'Create a new named layout',
+        alwaysShow: true
     });
+
+    const selection = await vscode.window.showQuickPick(items, {
+        placeHolder: existingNames.length > 0 
+            ? 'Select existing layout to overwrite, or create new'
+            : 'Enter new layout name',
+        ignoreFocusOut: true
+    });
+
+    if (!selection) return; // User cancelled
+
+    let layoutName: string | undefined;
+    
+    if (selection.label.startsWith('$(add)')) {
+        // User wants to enter a new name
+        layoutName = await vscode.window.showInputBox({
+            prompt: 'Enter new layout name',
+            placeHolder: 'my-layout',
+            validateInput: (value) => {
+                if (!value || value.trim().length === 0) {
+                    return 'Layout name cannot be empty';
+                }
+                return null;
+            }
+        });
+    } else {
+        // User selected an existing layout
+        layoutName = selection.label;
+    }
 
     if (!layoutName) return; // User cancelled
 
@@ -151,20 +181,17 @@ async function loadLayout() {
     await run('vscode.setEditorLayout', saved.layout);
 
     // Handle panel (terminal area) visibility
-    // Don't create new terminals, just show/hide the panel with existing terminals
+    // Default to true for backward compatibility with layouts saved before this feature
+    const shouldShowPanel = saved.panelVisible !== undefined ? saved.panelVisible : true;
     const hasExistingTerminals = vscode.window.terminals.some(t => !t.exitStatus);
     
-    // Default to true for backward compatibility with layouts saved before this feature
-    // This ensures old layouts don't unexpectedly hide the panel
-    const shouldShowPanel = saved.panelVisible !== undefined ? saved.panelVisible : true;
-    
     if (shouldShowPanel && hasExistingTerminals) {
-        // Show the panel with existing terminals
+        // Show the panel with existing terminals (don't create new ones)
         await run('workbench.action.terminal.focus');
         // Return focus to editor
         await run('workbench.action.focusActiveEditorGroup');
-    } else if (!shouldShowPanel && hasExistingTerminals) {
-        // Hide the panel if it was hidden in the saved layout
+    } else if (!shouldShowPanel) {
+        // Always hide the panel if layout had no terminals, regardless of current terminal state
         await run('workbench.action.closePanel');
     }
     // If shouldShowPanel but no terminals exist, do nothing (don't create terminals)
