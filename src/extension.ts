@@ -181,7 +181,9 @@ async function loadLayout() {
     await run('vscode.setEditorLayout', saved.layout);
 
     // Handle panel (terminal area) visibility
-    // Default to true for backward compatibility with layouts saved before this feature
+    // For backward compatibility, default to true when panelVisible wasn't saved
+    // If layout explicitly had no terminals (panelVisible: false), always hide the panel
+    // If layout had terminals (panelVisible: true), only show if active terminals exist
     const shouldShowPanel = saved.panelVisible !== undefined ? saved.panelVisible : true;
     const hasExistingTerminals = vscode.window.terminals.some(t => !t.exitStatus);
     
