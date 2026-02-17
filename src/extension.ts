@@ -1,6 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
+interface LayoutData {
+    layout: any; // VS Code's EditorGroupLayout type
+    documents: Array<{
+        relativePath: string;
+        column: number;
+        pinned: boolean;
+    }>;
+    panelVisible?: boolean;
+}
+
 const EXT_ID = 'layoutSaver';
 const CMD_ID = 'layout';
 const MAX_FAILED_FILES_BEFORE_TRUNCATION = 3;
@@ -24,8 +34,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function migrateOldLayout() {
-    const oldLayout = config.get<any>('layout');
-    const newLayouts = config.get<Record<string, any>>('layouts') || {};
+    const oldLayout = config.get<LayoutData>('layout');
+    const newLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     
     // If old layout exists and new layouts is empty, migrate it
     if (oldLayout && Object.keys(oldLayout).length > 0 && Object.keys(newLayouts).length === 0) {
@@ -41,8 +51,9 @@ async function migrateOldLayout() {
                 undefined,
                 vscode.ConfigurationTarget.Workspace
             );
+            vscode.window.showInformationMessage('Layout Saver: Migrated old layout to "default"');
         } catch (error) {
-            // Migration failed, but don't block activation
+            vscode.window.showWarningMessage('Layout Saver: Failed to migrate old layout. You may need to save it again.');
         }
     }
 }
@@ -52,7 +63,7 @@ async function saveLayout() {
     if (!tabs.length) return notify('No valid tabs to save (untitled tabs are ignored)', true);
 
     // Get existing layouts to show in the prompt
-    const existingLayouts = config.get<Record<string, any>>('layouts') || {};
+    const existingLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const existingNames = Object.keys(existingLayouts);
     
     // Prompt for layout name with existing layouts shown
@@ -69,9 +80,13 @@ async function saveLayout() {
     if (!layoutName) return; // User cancelled
 
     // Check if panel (bottom bar with terminals) is visible
-    const isPanelVisible = vscode.window.terminals.length > 0;
+    // We check for active terminals that haven't exited
+    const hasActiveTerminals = vscode.window.terminals.some(t => !t.exitStatus);
+    // Note: We can't reliably check if the panel is actually visible via API
+    // So we use terminal existence as a proxy - if terminals exist, panel was likely visible
+    const isPanelVisible = hasActiveTerminals;
 
-    const layout = {
+    const layout: LayoutData = {
         layout: await run('vscode.getEditorLayout'),
         documents: tabs
             .sort((a, b) => a.group.viewColumn - b.group.viewColumn)
@@ -98,7 +113,7 @@ async function saveLayout() {
 }
 
 async function loadLayout() {
-    const layouts = config.get<Record<string, any>>('layouts') || {};
+    const layouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const layoutNames = Object.keys(layouts);
 
     if (layoutNames.length === 0) {
@@ -137,8 +152,11 @@ async function loadLayout() {
 
     // Handle panel (terminal area) visibility
     // Don't create new terminals, just show/hide the panel with existing terminals
-    const hasExistingTerminals = vscode.window.terminals.length > 0;
-    const shouldShowPanel = saved.panelVisible ?? false;
+    const hasExistingTerminals = vscode.window.terminals.some(t => !t.exitStatus);
+    
+    // Default to true for backward compatibility with layouts saved before this feature
+    // This ensures old layouts don't unexpectedly hide the panel
+    const shouldShowPanel = saved.panelVisible !== undefined ? saved.panelVisible : true;
     
     if (shouldShowPanel && hasExistingTerminals) {
         // Show the panel with existing terminals
