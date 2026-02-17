@@ -14,26 +14,23 @@ interface LayoutData {
 const EXT_ID = 'layoutSaver';
 const CMD_ID = 'layout';
 const MAX_FAILED_FILES_BEFORE_TRUNCATION = 3;
-let config: vscode.WorkspaceConfiguration;
+
+function getConfig(): vscode.WorkspaceConfiguration {
+    return vscode.workspace.getConfiguration(EXT_ID);
+}
 
 export function activate(context: vscode.ExtensionContext) {
-    config = vscode.workspace.getConfiguration(EXT_ID);
-
     // Migrate old single layout to new multi-layout format
     migrateOldLayout();
 
     context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration(EXT_ID)) {
-                config = vscode.workspace.getConfiguration(EXT_ID);
-            }
-        }),
         vscode.commands.registerCommand(`${CMD_ID}.save`, saveLayout),
         vscode.commands.registerCommand(`${CMD_ID}.load`, loadLayout)
     );
 }
 
 async function migrateOldLayout() {
+    const config = getConfig();
     const oldLayout = config.get<LayoutData>('layout');
     const newLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     
@@ -62,10 +59,8 @@ async function saveLayout() {
     const tabs = getValidTextTabs();
     if (!tabs.length) return notify('No valid tabs to save (untitled tabs are ignored)', true);
 
-    // Refresh config to ensure we have the latest layouts
-    config = vscode.workspace.getConfiguration(EXT_ID);
-    
     // Get existing layouts to show in the prompt
+    const config = getConfig();
     const existingLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const existingNames = Object.keys(existingLayouts);
     
@@ -146,9 +141,8 @@ async function saveLayout() {
 }
 
 async function loadLayout() {
-    // Refresh config to ensure we have the latest layouts
-    config = vscode.workspace.getConfiguration(EXT_ID);
-    
+    // Get current configuration
+    const config = getConfig();
     const layouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const layoutNames = Object.keys(layouts);
 
