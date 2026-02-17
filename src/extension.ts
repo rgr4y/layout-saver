@@ -98,7 +98,8 @@ async function loadLayout() {
         notify('Failed to restore layout: no files could be opened', true);
     } else {
         // Show warning for partial failures
-        // Only truncate if we're saving at least 2 filenames (avoid "3 files and 1 more")
+        // Show first N files when truncating, but don't truncate unless we save at least 2 names
+        // (e.g., with N=3: show all for 1-4 files, truncate to "3 and X more" for 5+)
         const fileList = failedFiles.length <= MAX_FAILED_FILES_BEFORE_TRUNCATION + 1
             ? failedFiles.join(', ')
             : `${failedFiles.slice(0, MAX_FAILED_FILES_BEFORE_TRUNCATION).join(', ')} and ${failedFiles.length - MAX_FAILED_FILES_BEFORE_TRUNCATION} more`;
