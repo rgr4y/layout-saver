@@ -68,6 +68,9 @@ async function saveLayout() {
 
     if (!layoutName) return; // User cancelled
 
+    // Check if panel (bottom bar with terminals) is visible
+    const isPanelVisible = vscode.window.terminals.length > 0;
+
     const layout = {
         layout: await run('vscode.getEditorLayout'),
         documents: tabs
@@ -76,7 +79,8 @@ async function saveLayout() {
                 relativePath: vscode.workspace.asRelativePath(tab.input.uri),
                 column: tab.group.viewColumn,
                 pinned: tab.isPinned
-            }))
+            })),
+        panelVisible: isPanelVisible
     };
 
     try {
@@ -130,6 +134,22 @@ async function loadLayout() {
     // Apply the layout structure (columns) to set up the grid
     // This only affects editor groups, not terminals
     await run('vscode.setEditorLayout', saved.layout);
+
+    // Handle panel (terminal area) visibility
+    // Don't create new terminals, just show/hide the panel with existing terminals
+    const hasExistingTerminals = vscode.window.terminals.length > 0;
+    const shouldShowPanel = saved.panelVisible ?? false;
+    
+    if (shouldShowPanel && hasExistingTerminals) {
+        // Show the panel with existing terminals
+        await run('workbench.action.terminal.focus');
+        // Return focus to editor
+        await run('workbench.action.focusActiveEditorGroup');
+    } else if (!shouldShowPanel && hasExistingTerminals) {
+        // Hide the panel if it was hidden in the saved layout
+        await run('workbench.action.closePanel');
+    }
+    // If shouldShowPanel but no terminals exist, do nothing (don't create terminals)
 
     // Track files that couldn't be opened
     const failedFiles: string[] = [];
