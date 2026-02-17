@@ -62,6 +62,9 @@ async function saveLayout() {
     const tabs = getValidTextTabs();
     if (!tabs.length) return notify('No valid tabs to save (untitled tabs are ignored)', true);
 
+    // Refresh config to ensure we have the latest layouts
+    config = vscode.workspace.getConfiguration(EXT_ID);
+    
     // Get existing layouts to show in the prompt
     const existingLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const existingNames = Object.keys(existingLayouts);
@@ -143,6 +146,9 @@ async function saveLayout() {
 }
 
 async function loadLayout() {
+    // Refresh config to ensure we have the latest layouts
+    config = vscode.workspace.getConfiguration(EXT_ID);
+    
     const layouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const layoutNames = Object.keys(layouts);
 
