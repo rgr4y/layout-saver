@@ -9,6 +9,9 @@ let config: vscode.WorkspaceConfiguration;
 export function activate(context: vscode.ExtensionContext) {
     config = vscode.workspace.getConfiguration(EXT_ID);
 
+    // Migrate old single layout to new multi-layout format
+    migrateOldLayout();
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration(EXT_ID)) {
@@ -20,9 +23,50 @@ export function activate(context: vscode.ExtensionContext) {
     );
 }
 
+async function migrateOldLayout() {
+    const oldLayout = config.get<any>('layout');
+    const newLayouts = config.get<Record<string, any>>('layouts') || {};
+    
+    // If old layout exists and new layouts is empty, migrate it
+    if (oldLayout && Object.keys(oldLayout).length > 0 && Object.keys(newLayouts).length === 0) {
+        try {
+            await vscode.workspace.getConfiguration().update(
+                `${EXT_ID}.layouts`,
+                { 'default': oldLayout },
+                vscode.ConfigurationTarget.Workspace
+            );
+            // Clear the old layout
+            await vscode.workspace.getConfiguration().update(
+                `${EXT_ID}.layout`,
+                undefined,
+                vscode.ConfigurationTarget.Workspace
+            );
+        } catch (error) {
+            // Migration failed, but don't block activation
+        }
+    }
+}
+
 async function saveLayout() {
     const tabs = getValidTextTabs();
     if (!tabs.length) return notify('No valid tabs to save (untitled tabs are ignored)', true);
+
+    // Get existing layouts to show in the prompt
+    const existingLayouts = config.get<Record<string, any>>('layouts') || {};
+    const existingNames = Object.keys(existingLayouts);
+    
+    // Prompt for layout name with existing layouts shown
+    const promptMessage = existingNames.length > 0
+        ? `Enter layout name (existing: ${existingNames.join(', ')})`
+        : 'Enter layout name';
+    
+    const layoutName = await vscode.window.showInputBox({
+        prompt: promptMessage,
+        placeHolder: 'my-layout',
+        value: existingNames.length === 1 ? existingNames[0] : undefined
+    });
+
+    if (!layoutName) return; // User cancelled
 
     const layout = {
         layout: await run('vscode.getEditorLayout'),
@@ -36,20 +80,43 @@ async function saveLayout() {
     };
 
     try {
+        // Save to named layouts collection
+        const layouts = { ...existingLayouts, [layoutName]: layout };
         await vscode.workspace.getConfiguration().update(
-            `${EXT_ID}.layout`,
-            layout,
+            `${EXT_ID}.layouts`,
+            layouts,
             vscode.ConfigurationTarget.Workspace
         );
-        notify('Layout saved successfully');
+        notify(`Layout "${layoutName}" saved successfully`);
     } catch {
         notify('Failed to save layout', true);
     }
 }
 
 async function loadLayout() {
-    const saved = config.get<any>('layout');
-    if (!saved?.documents || !saved?.layout) return notify('No saved layout found', true);
+    const layouts = config.get<Record<string, any>>('layouts') || {};
+    const layoutNames = Object.keys(layouts);
+
+    if (layoutNames.length === 0) {
+        return notify('No saved layouts found', true);
+    }
+
+    // Prompt to select a layout
+    let layoutName: string | undefined;
+    if (layoutNames.length === 1) {
+        layoutName = layoutNames[0];
+    } else {
+        layoutName = await vscode.window.showQuickPick(layoutNames, {
+            placeHolder: 'Select a layout to restore'
+        });
+    }
+
+    if (!layoutName) return; // User cancelled
+
+    const saved = layouts[layoutName];
+    if (!saved?.documents || !saved?.layout) {
+        return notify(`Layout "${layoutName}" is invalid or corrupted`, true);
+    }
 
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspaceRoot) return notify('No workspace folder found', true);
@@ -61,6 +128,7 @@ async function loadLayout() {
     }
 
     // Apply the layout structure (columns) to set up the grid
+    // This only affects editor groups, not terminals
     await run('vscode.setEditorLayout', saved.layout);
 
     // Track files that couldn't be opened
@@ -93,9 +161,9 @@ async function loadLayout() {
 
     // Provide appropriate feedback based on results
     if (failedFiles.length === 0) {
-        notify('Layout restored successfully');
+        notify(`Layout "${layoutName}" restored successfully`);
     } else if (failedFiles.length === saved.documents.length) {
-        notify('Failed to restore layout: no files could be opened', true);
+        notify(`Failed to restore layout "${layoutName}": no files could be opened`, true);
     } else {
         // Show warning for partial failures
         // Show first N files when truncating, but don't truncate unless we save at least 2 names
@@ -103,7 +171,7 @@ async function loadLayout() {
         const fileList = failedFiles.length <= MAX_FAILED_FILES_BEFORE_TRUNCATION + 1
             ? failedFiles.join(', ')
             : `${failedFiles.slice(0, MAX_FAILED_FILES_BEFORE_TRUNCATION).join(', ')} and ${failedFiles.length - MAX_FAILED_FILES_BEFORE_TRUNCATION} more`;
-        vscode.window.showWarningMessage(`Layout Saver: Layout restored with ${failedFiles.length} file(s) unavailable: ${fileList}`);
+        vscode.window.showWarningMessage(`Layout Saver: Layout "${layoutName}" restored with ${failedFiles.length} file(s) unavailable: ${fileList}`);
     }
 }
 

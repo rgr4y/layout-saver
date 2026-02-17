@@ -4,10 +4,12 @@ Layout Saver is a simple VS Code extension that lets you save and restore your e
 
 ## Features
 
-* Save the current editor layout (visible tabs, positions, and layout).
+* Save multiple named editor layouts (visible tabs, positions, and layout).
 * Restore saved layouts with a single command.
+* See existing layout names when saving for easy reference.
 * Optionally hide the side bar after restoring.
 * Skips untitled or dirty tabs for safe restoring.
+* Preserves existing terminals and other non-editor tabs.
 
 ---
 
@@ -15,8 +17,8 @@ Layout Saver is a simple VS Code extension that lets you save and restore your e
 
 | Command       | Title       | Description                      |
 | ------------- | ----------- | -------------------------------- |
-| `layout.save` | Save Layout | Saves the current editor layout. |
-| `layout.load` | Load Layout | Loads the saved editor layout.   |
+| `layout.save` | Save Layout | Prompts for a name and saves the current editor layout. |
+| `layout.load` | Load Layout | Shows a list of saved layouts to restore.   |
 
 You can trigger these via the Command Palette (Ctrl+Shift+P) or bind custom keys.
 
@@ -26,20 +28,38 @@ Default keybinding:
 
 ---
 
+## Usage
+
+### Saving a Layout
+
+1. Arrange your editor tabs in the desired layout
+2. Run the "Save Layout" command
+3. Enter a name for your layout (you'll see existing layout names for reference)
+4. The layout is saved to your workspace settings
+
+### Loading a Layout
+
+1. Run the "Load Layout" command
+2. Select a layout from the list
+3. Your editor tabs will be rearranged to match the saved layout
+4. Existing terminals and other tabs remain untouched
+
+---
+
 ## Configuration Options
 
 You can customize behavior through your settings (`settings.json`):
 
 ```json
 {
-  "layoutSaver.layout": {},
+  "layoutSaver.layouts": {},
   "layoutSaver.hideSideBarAfterOpen": true
 }
 ```
 
 ### Property Reference
 
-* `layoutSaver.layout`: Internal storage for the saved layout.
+* `layoutSaver.layouts`: Internal storage for named layouts (object with layout names as keys).
 * `layoutSaver.hideSideBarAfterOpen`: Hides the sidebar after layout is restored.
 
 ---
@@ -66,7 +86,8 @@ This opens a new VS Code window where the extension is loaded for testing.
 
 ## Known Limitations
 
-* Webviews and terminal tabs cannot be restored (VS Code API limitation).
+* Terminal tabs are not included in saved layouts (VS Code API limitation). Existing terminals are preserved when restoring layouts.
+* Webviews cannot be restored (VS Code API limitation).
 * Untitled tabs and dirty (unsaved) tabs are skipped when saving.
 
 ---

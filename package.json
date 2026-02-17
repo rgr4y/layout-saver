@@ -39,10 +39,10 @@
       "title": "Layout Saver",
       "type": "object",
       "properties": {
-        "layoutSaver.layout": {
+        "layoutSaver.layouts": {
           "type": "object",
           "default": {},
-          "description": "The saved editor layout"
+          "description": "Named editor layouts"
         },
         "layoutSaver.hideSideBarAfterOpen": {
           "type": "boolean",
