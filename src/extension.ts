@@ -3,7 +3,7 @@ import * as path from 'path';
 
 const EXT_ID = 'layoutSaver';
 const CMD_ID = 'layout';
-const MAX_DISPLAYED_FAILED_FILES = 3;
+const MAX_FAILED_FILES_BEFORE_TRUNCATION = 3;
 let config: vscode.WorkspaceConfiguration;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -98,10 +98,10 @@ async function loadLayout() {
         notify('Failed to restore layout: no files could be opened', true);
     } else {
         // Show warning for partial failures
-        // Only truncate if we're saving at least 2 filenames
-        const fileList = failedFiles.length <= MAX_DISPLAYED_FAILED_FILES + 1
+        // Only truncate if we're saving at least 2 filenames (avoid "3 files and 1 more")
+        const fileList = failedFiles.length <= MAX_FAILED_FILES_BEFORE_TRUNCATION + 1
             ? failedFiles.join(', ')
-            : `${failedFiles.slice(0, MAX_DISPLAYED_FAILED_FILES).join(', ')} and ${failedFiles.length - MAX_DISPLAYED_FAILED_FILES} more`;
+            : `${failedFiles.slice(0, MAX_FAILED_FILES_BEFORE_TRUNCATION).join(', ')} and ${failedFiles.length - MAX_FAILED_FILES_BEFORE_TRUNCATION} more`;
         vscode.window.showWarningMessage(`Layout Saver: Layout restored with ${failedFiles.length} file(s) unavailable: ${fileList}`);
     }
 }
