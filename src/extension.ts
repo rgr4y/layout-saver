@@ -64,48 +64,50 @@ async function saveLayout() {
     const existingLayouts = config.get<Record<string, LayoutData>>('layouts') || {};
     const existingNames = Object.keys(existingLayouts);
     
-    // Use QuickPick to show existing layouts and allow entering a new name
+    // Create a QuickPick that allows both selection and free-text input
+    const quickPick = vscode.window.createQuickPick();
+    quickPick.placeholder = existingNames.length > 0 
+        ? 'Type a new layout name or select existing to overwrite'
+        : 'Type a layout name';
+    quickPick.ignoreFocusOut = true;
+    
+    // Populate with existing layouts
     const items: vscode.QuickPickItem[] = existingNames.map(name => ({
         label: name,
         description: '(existing layout - will overwrite)'
     }));
     
-    // Add option to enter new name
-    items.unshift({
-        label: '$(add) Enter new layout name...',
-        description: 'Create a new named layout',
-        alwaysShow: true
-    });
-
-    const selection = await vscode.window.showQuickPick(items, {
-        placeHolder: existingNames.length > 0 
-            ? 'Select existing layout to overwrite, or create new'
-            : 'Enter new layout name',
-        ignoreFocusOut: true
-    });
-
-    if (!selection) return; // User cancelled
-
+    quickPick.items = items;
+    
     let layoutName: string | undefined;
     
-    if (selection.label.startsWith('$(add)')) {
-        // User wants to enter a new name
-        layoutName = await vscode.window.showInputBox({
-            prompt: 'Enter new layout name',
-            placeHolder: 'my-layout',
-            validateInput: (value) => {
-                if (!value || value.trim().length === 0) {
-                    return 'Layout name cannot be empty';
-                }
-                return null;
-            }
-        });
-    } else {
-        // User selected an existing layout
-        layoutName = selection.label;
+    // Handle selection or manual input
+    quickPick.onDidAccept(() => {
+        const selected = quickPick.selectedItems[0];
+        if (selected) {
+            // User selected an existing layout
+            layoutName = selected.label;
+        } else {
+            // User typed a new name
+            layoutName = quickPick.value.trim();
+        }
+        quickPick.hide();
+    });
+    
+    quickPick.onDidHide(() => {
+        quickPick.dispose();
+    });
+    
+    quickPick.show();
+    
+    // Wait for the user to make a selection or type a name
+    await new Promise<void>((resolve) => {
+        quickPick.onDidHide(() => resolve());
+    });
+    
+    if (!layoutName || layoutName.length === 0) {
+        return; // User cancelled or entered empty name
     }
-
-    if (!layoutName) return; // User cancelled
 
     // Check if panel (bottom bar with terminals) is visible
     // We check for active terminals that haven't exited
