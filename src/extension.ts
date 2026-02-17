@@ -80,34 +80,47 @@ async function saveLayout() {
     quickPick.items = items;
     
     let layoutName: string | undefined;
+    let resolved = false;
     
-    // Handle selection or manual input
-    quickPick.onDidAccept(() => {
-        const selected = quickPick.selectedItems[0];
-        if (selected) {
-            // User selected an existing layout
-            layoutName = selected.label;
-        } else {
-            // User typed a new name
-            layoutName = quickPick.value.trim();
-        }
-        quickPick.hide();
-    });
-    
-    quickPick.onDidHide(() => {
-        quickPick.dispose();
+    // Create a promise that resolves when user makes a choice
+    const result = new Promise<void>((resolve) => {
+        // Handle selection or manual input
+        quickPick.onDidAccept(() => {
+            const selected = quickPick.selectedItems[0];
+            const typedValue = quickPick.value.trim();
+            
+            if (selected) {
+                // User selected an existing layout from the list
+                layoutName = selected.label;
+            } else if (typedValue) {
+                // User typed a name (new or matching existing)
+                layoutName = typedValue;
+            }
+            
+            resolved = true;
+            quickPick.hide();
+        });
+        
+        quickPick.onDidHide(() => {
+            if (!resolved) {
+                layoutName = undefined; // User cancelled
+            }
+            quickPick.dispose();
+            resolve();
+        });
     });
     
     quickPick.show();
     
     // Wait for the user to make a selection or type a name
-    await new Promise<void>((resolve) => {
-        quickPick.onDidHide(() => resolve());
-    });
+    await result;
     
-    if (!layoutName || layoutName.length === 0) {
+    if (!layoutName || layoutName.trim().length === 0) {
         return; // User cancelled or entered empty name
     }
+
+    // Ensure layoutName is trimmed
+    layoutName = layoutName.trim();
 
     // Check if panel (bottom bar with terminals) is visible
     // We check for active terminals that haven't exited
